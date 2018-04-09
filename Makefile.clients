@@ -1,0 +1,152 @@
+# Copyright (c) 2018, NVIDIA CORPORATION. All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+#  * Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+#  * Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#  * Neither the name of NVIDIA CORPORATION nor the names of its
+#    contributors may be used to endorse or promote products derived
+#    from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
+# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+## Makefile for Inference Server Clients
+
+BUILDDIR    ?= build
+CFLAGS      ?= -std=c++11 -fPIC -Wall -Werror -O2
+
+#==============================================================================
+
+SRCDIR       = src
+CLIENTDIR   := $(SRCDIR)/clients
+COMMONDIR   := $(SRCDIR)/clients/common
+PYTHONDIR   := $(SRCDIR)/clients/python
+
+BDISTDIR    := $(BUILDDIR)/dist
+
+IMAGE_SRCS  := $(shell find $(CLIENTDIR)/image_classification -name '*.cc')
+IMAGE_OBJS  := $(addprefix $(BUILDDIR)/, $(IMAGE_SRCS:%.cc=%.o))
+IMAGE_LDFLAGS := -lcurl -lopencv_core -lopencv_imgproc -lopencv_highgui -lprotobuf
+
+LIBREQ_SRCS := $(shell find $(PYTHONDIR) -name '*.cc')
+LIBREQ_OBJS := $(addprefix $(BUILDDIR)/, $(LIBREQ_SRCS:%.cc=%.o))
+LIBREQ_LDFLAGS := -lprotobuf -lcurl
+
+CMN_SRCS    := $(shell find $(COMMONDIR) -name '*.cc') \
+               $(SRCDIR)/core/model_config.cc
+CMN_OBJS    := $(addprefix $(BUILDDIR)/, $(CMN_SRCS:%.cc=%.o))
+
+PY_SRCS     := $(CLIENTDIR)/python/__init__.py
+PY_SETUP    := $(CLIENTDIR)/python/setup.py
+
+PROTOS      := $(SRCDIR)/core/api.proto \
+               $(SRCDIR)/core/model_config.proto \
+               $(SRCDIR)/core/status.proto \
+               $(SRCDIR)/core/server_status.proto
+PROTO_CP    := $(addprefix $(BUILDDIR)/, $(PROTOS))
+PROTO_HDRS  := $(addprefix $(BUILDDIR)/, $(PROTOS:%.proto=%.pb.h))
+PROTO_SRCS  := $(PROTO_HDRS:.h=.cc)
+PROTO_PY    := $(PROTO_HDRS:.pb.h=_pb2.py)
+PROTO_OBJS  := $(PROTO_SRCS:.cc=.o)
+
+PROTOC      := protoc
+
+CFLAGS      += -MMD -MP
+INCS        += -I.
+INCS        += -I$(BUILDDIR)
+
+DEPS         = $(IMAGE_OBJS:.o=.d) \
+               $(CMN_OBJS:.o=.d) $(LIBREQ_OBJS:.o=.d) $(PROTO_OBJS:.o=.d)
+
+.PHONY: all pip protobuf clean help show
+.SUFFIXES:
+.SECONDARY: $(PROTO_HDRS) $(PROTO_SRCS) $(PROTO_PY) $(PROTO_CP)
+
+all: $(BUILDDIR)/libcrequest.so $(BUILDDIR)/image_client
+
+pip: $(PY_SRCS) $(PROTO_PY) $(BUILDDIR)/libcrequest.so
+	$(RM) -fr $(BDISTDIR)
+	mkdir -p $(BDISTDIR)/inference_server/api
+	cp $^ $(BDISTDIR)/inference_server/api/.
+	cp $(PY_SETUP) $(BDISTDIR)/.
+	touch $(BDISTDIR)/inference_server/__init__.py
+	(cd $(BDISTDIR) && python setup.py bdist_wheel)
+
+protobuf: $(PROTO_HDRS) $(PROTO_SRCS) $(PROTO_PY)
+
+$(BUILDDIR)/libcrequest.so: $(LIBREQ_OBJS) $(PROTO_OBJS) $(CMN_OBJS)
+	$(CXX) -shared -o $@ $^ $(LIBREQ_LDFLAGS)
+
+$(BUILDDIR)/image_client: $(IMAGE_OBJS) $(PROTO_OBJS) $(CMN_OBJS)
+	$(CXX) -o $@ $^ $(IMAGE_LDFLAGS)
+
+$(BUILDDIR)/$(SRCDIR)/%.o: $(SRCDIR)/%.cc $(PROTO_HDRS)
+	mkdir -p $(dir $@)
+	$(CXX) $(CFLAGS) $(INCS) -c $< -o $@
+
+$(BUILDDIR)/%.pb.o: $(BUILDDIR)/%.pb.cc $(PROTO_HDRS)
+	mkdir -p $(dir $@)
+	$(CXX) $(CFLAGS) $(INCS) -c $< -o $@
+
+$(BUILDDIR)/$(SRCDIR)/%.proto: $(SRCDIR)/%.proto
+	mkdir -p $(dir $@)
+	cp $< $@
+	sed -i -e 's/src\/core\///' $@
+
+$(BUILDDIR)/$(SRCDIR)/%.pb.cc $(BUILDDIR)/$(SRCDIR)/%.pb.h \
+    $(BUILDDIR)/$(SRCDIR)/%_pb2.py: $(BUILDDIR)/$(SRCDIR)/%.proto
+	mkdir -p $(dir $<)
+	$(PROTOC) -I$(dir $<) --cpp_out=$(dir $<) --python_out=$(dir $<) $<
+
+-include $(DEPS)
+
+clean:
+	$(RM) -fr $(BUILDDIR)
+
+# Show help.
+help:
+	@echo 'Inference Server Client Makefile'
+	@echo
+	@echo 'Usage: make [TARGET]'
+	@echo 'TARGETS:'
+	@echo '  all       compile and link'
+	@echo '  pip       create whl for python client'
+	@echo '  protobuf  generate protobuf *.pb.h and *.pb.cc'
+	@echo '  clean     clean all build artifacts'
+	@echo '  show      show variables'
+	@echo '  help      print this message'
+
+# Show variables
+show:
+	@echo 'BUILDDIR    :' $(BUILDDIR)
+	@echo 'SRCDIR      :' $(SRCDIR)
+	@echo 'CLIENTDIR   :' $(CLIENTDIR)
+	@echo 'COMMONDIR   :' $(COMMONDIR)
+	@echo 'PYTHONDIR   :' $(PYTHONDIR)
+	@echo 'CFLAGS      :' $(CFLAGS)
+	@echo 'INCS        :' $(INCS)
+	@echo 'IMAGE_SRCS  :' $(IMAGE_SRCS)
+	@echo 'IMAGE_OBJS  :' $(IMAGE_OBJS)
+	@echo 'CMN_SRCS    :' $(CMN_SRCS)
+	@echo 'CMN_OBJS    :' $(CMN_OBJS)
+	@echo 'LIBREQ_SRCS :' $(LIBREQ_SRCS)
+	@echo 'LIBREQ_OBJS :' $(LIBREQ_OBJS)
+	@echo 'PROTOS      :' $(PROTOS)
+	@echo 'PROTO_HDRS  :' $(PROTO_HDRS)
+	@echo 'PROTO_SRCS  :' $(PROTO_SRCS)
+	@echo 'PROTO_OBJS  :' $(PROTO_OBJS)
+	@echo 'DEPS        :' $(DEPS)
