@@ -82,7 +82,7 @@ Error::Error(RequestStatusCode code)
 Error::Error(const RequestStatus& status)
   : Error(status.code(), status.msg())
 {
-  server_id_ = status.server_id();
+  server_id_ = "unknown"; // FIXME
 }
 
 std::ostream&

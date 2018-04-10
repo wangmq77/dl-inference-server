@@ -49,10 +49,7 @@ message RequestStatus {
   // Optional message
   string msg = 2;
 
-  // Inference server identifier.
-  string server_id = 3;
-
   // Unique identifier for the request. Value 0 (zero) indicates
   // request ID is not known.
-  uint64 request_id = 4;
+  uint64 request_id = 3;
 }
