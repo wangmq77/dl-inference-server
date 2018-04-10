@@ -76,9 +76,9 @@ DEPS         = $(IMAGE_OBJS:.o=.d) \
 .SUFFIXES:
 .SECONDARY: $(PROTO_HDRS) $(PROTO_SRCS) $(PROTO_PY) $(PROTO_CP)
 
-all: $(BUILDDIR)/libcrequest.so $(BUILDDIR)/image_client
+all: $(BUILDDIR)/src/clients/python/libcrequest.so $(BUILDDIR)/image_client
 
-pip: $(PY_SRCS) $(PROTO_PY) $(BUILDDIR)/libcrequest.so
+pip: $(PY_SRCS) $(PROTO_PY) $(BUILDDIR)/src/clients/python/libcrequest.so
 	$(RM) -fr $(BDISTDIR)
 	mkdir -p $(BDISTDIR)/inference_server/api
 	cp $^ $(BDISTDIR)/inference_server/api/.
@@ -88,7 +88,7 @@ pip: $(PY_SRCS) $(PROTO_PY) $(BUILDDIR)/libcrequest.so
 
 protobuf: $(PROTO_HDRS) $(PROTO_SRCS) $(PROTO_PY)
 
-$(BUILDDIR)/libcrequest.so: $(LIBREQ_OBJS) $(PROTO_OBJS) $(CMN_OBJS)
+$(BUILDDIR)/src/clients/python/libcrequest.so: $(LIBREQ_OBJS) $(PROTO_OBJS) $(CMN_OBJS)
 	$(CXX) -shared -o $@ $^ $(LIBREQ_LDFLAGS)
 
 $(BUILDDIR)/image_client: $(IMAGE_OBJS) $(PROTO_OBJS) $(CMN_OBJS)
