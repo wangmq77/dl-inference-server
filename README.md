@@ -100,7 +100,7 @@ for (size_t i = 0; i < batch_size; ++i) {
 
 The Python client API provides similar capabilities as the C++
 API. The commented interface for StatusContext and InferContext
-classes is available at src/clients/python/__init__.py.
+classes is available at src/clients/python/\_\_init\_\_.py.
 
 The following shows an example of the basic steps required for
 inferencing (error checking not included to improve clarity):
