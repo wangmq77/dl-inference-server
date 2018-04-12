@@ -7,21 +7,21 @@ for any model being managed by the server.
 
 This repo contains a C++ and Python client libraries that make it easy
 to communicate with an inference server. Also included is
-*image_client*, an example C++ application that uses the C++ client
+*image\_client*, an example C++ application that uses the C++ client
 library to execute image classification models on the inference
 server.
 
 The inference server itself is delivered as a containerized solution
-from the NVIDIA Compute Cloud. See the
+from the [NVIDIA GPU Cloud](https://www.nvidia.com/en-us/gpu-cloud/). See the
 [Inference Container User Guide](http://docs.nvidia.com/deeplearning/dgx/index.html)
 for information on how to install and configure the inference server.
 
-## Building
+## Building The Clients
 
-Before building you must first install some prerequisites. The
-following instructions assume Ubuntu 16.04. OpenCV is used by
-image_client to preprocess images before sending them to the inference
-server for inferencing.
+Before building the client libraries and applications you must first
+install some prerequisites. The following instructions assume Ubuntu
+16.04. OpenCV is used by image\_client to preprocess images before
+sending them to the inference server for inferencing.
 
     sudo apt-get update
     sudo apt-get install build-essential libcurl3-dev libopencv-dev libopencv-core-dev software-properties-common
@@ -39,7 +39,7 @@ Creating the whl file for the Python client library requires setuptools.
     pip install --no-cache-dir --upgrade setuptools
 
 With those prerequisites installed the C++ and Python client libraries
-and example image_cliet application can be built:
+and example image\_client application can be built:
 
     make -f Makefile.clients all pip
 
@@ -48,13 +48,61 @@ build/dist/dist/ and can be installed with a command like the following:
 
     pip install --no-cache-dir --upgrade build/dist/dist/inference_server-0.0.1-cp27-cp27mu-linux_x86_64.whl
 
+## Image Classification Example
+
+The image classification example that uses the C++ client API is
+available at src/clients/image\_classification/image\_client.cc. After
+building, the executable is available at build/image\_client.
+
+To use image\_client you must first have an inference server that is
+serving one or more image classification models. The image\_client
+example requires that the model have a single image input and produce
+a single classification output.
+
+A simple TensorRT MNIST model is provided in the examples/models
+directory that we can use to demonstrate image\_client. Following the
+instructions in the [Inference Container User
+Guide](http://docs.nvidia.com/deeplearning/dgx/index.html), launch the
+inference server container pointing to that model store. For example:
+
+    nvidia-docker run --rm --shm-size=1g --ulimit memlock=-1 --ulimit stack=67108864 -p8000:8000 --mount type=bind,source=/path/to/dl-inference-server/examples/models,target=/tmp/models nvcr.io/nvidia/inferenceserver:18.04 /opt/inference_server/bin/inference_server --model_base_path=/tmp/models
+
+Replace /path/to/dl-inference-server/examples/models with the
+corresponding path in your local clone of this repo. Once the server
+is running you can use image\_client to send inference requests to the
+server.
+
+    image_client -m mnist_plan -s VGG examples/data/3.pgm
+
+By default the client prints the most probable classification for the image.
+
+    Prediction totals:
+            cnt=1   (3) three
+
+Use the -c flag to see more classifications.
+
+    image_client -m mnist_plan -s VGG -c 3 examples/data/3.pgm
+    Output probabilities:
+    batch 0: 3 ("three") = 0.996513
+    batch 0: 5 ("five") = 0.00348471
+    batch 0: 4 ("four") = 2.07097e-06
+    Prediction totals:
+            cnt=1   (3) three
+
+The -b flag allows you to send a batch of images for inferencing.
+Currently image\_client just sends the same image multiple times, so
+you will just see the same classification results repeated (as
+indicated by the 'cnt' value).
+
+    image_client -m mnist_plan -s VGG -b 2 examples/data/3.pgm
+    Prediction totals:
+            cnt=2   (3) three
+
 ## C++ API
 
 The C++ client API exposes a class-based interface for querying server
 and model status and for performing inference. The commented interface
-is available at src/clients/common/request.h. The image classification
-example that uses this API is available at
-src/clients/image_classification/image_client.cc.
+is available at src/clients/common/request.h.
 
 The following shows an example of the basic steps required for
 inferencing (error checking not included to improve clarity, see
