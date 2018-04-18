@@ -16,6 +16,14 @@ from the [NVIDIA GPU Cloud](https://www.nvidia.com/en-us/gpu-cloud/). See the
 [Inference Container User Guide](http://docs.nvidia.com/deeplearning/dgx/index.html)
 for information on how to install and configure the inference server.
 
+## Branches
+
+**master**: Active development branch. Typically will be compatible with
+ the currently released NVIDIA Inference Server container, but not
+ guaranteed.
+
+**18.04**: Branch compatible with NVIDIA Inference Server 18.04.
+
 ## Building The Clients
 
 Before building the client libraries and applications you must first
